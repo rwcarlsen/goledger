@@ -2,11 +2,11 @@
 package ledger
 
 import (
-	"os"
 	"io"
 	"fmt"
+	"time"
 	"text/tabwriter"
-	"strings"
+	"bytes"
 )
 
 const (
@@ -21,7 +21,9 @@ const (
 	UnknownEntry = "Unknown"
 )
 
-var indent = strings.Repeat(" ", tabwidth)
+const dateFmt = "01/02/2006"
+
+var indent = bytes.Repeat([]byte(" "), tabwidth)
 
 type Entry interface {
 	Print(io.Writer) error
@@ -40,25 +42,26 @@ func (t *Trans) Type() string {
 	return TransEntry
 }
 
+func (t *Trans) AddPost(p *Post) {
+	p.trans = t
+	t.Posts = append(t.Posts, p)
+}
+
 func (t *Trans) Print(w io.Writer) error {
-	_, err := fmt.Fprintf(w, "%v\t%v\t%v\n", t.Date.Format(dateFmt), t.Status, t.Payee)
+	_, err := fmt.Fprintf(w, "%v %v %v\n", t.Date.Format(dateFmt), t.Status, t.Payee)
 	if err != nil {
 		return err
 	}
 
 	for _, c := range t.Comments {
-		if _, err := fmt.Fprintf(w, "%v; %v\n", indent, c); err != nil {
+		if _, err := fmt.Fprintf(w, "%s; %v\n", indent, c); err != nil {
 			return err
 		}
 	}
 
 	tw := tabwriter.NewWriter(w, minwidth, tabwidth, padding, padchar, 0)
 	for _, p := range t.Posts {
-		if _, err := tw.Write(indent); err != nil {
-			return err
-		} else if err := p.Print(tw); err != nil {
-			return err
-		} else _, err := fmt.Fprint(tw, "\n"); err != nil {
+		if err := p.Print(tw); err != nil {
 			return err
 		}
 	}
@@ -67,7 +70,7 @@ func (t *Trans) Print(w io.Writer) error {
 }
 
 type Post struct {
-	trans *Transaction
+	trans *Trans
 	Account string
 	status string
 	Commod string
@@ -83,8 +86,20 @@ func (p *Post) Status() string {
 }
 
 func (p *Post) Print(w io.Writer) error {
-	fmt.Fprintf(w, "%v\t%v\t%v%v")
+	if _, err := w.Write(indent); err != nil {
+		return err
+	}
 
+	if p.status != "" {
+		fmt.Fprintf(w, "%v ", p.status)
+	}
+	fmt.Fprintf(w, "%v\t%v%v\n", p.Account, p.Commod, p.Qty)
+
+	for _, c := range p.Comments {
+		if _, err := fmt.Fprintf(w, "%s%s; %v\n", indent, indent, c); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
