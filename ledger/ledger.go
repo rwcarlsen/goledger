@@ -7,13 +7,14 @@ import (
 	"time"
 	"text/tabwriter"
 	"bytes"
+	"strings"
 )
 
 const (
-	minwidth = 8
-	tabwidth = 4
-	padding = 2
-	padchar = ' '
+	Minwidth = 4
+	Tabwidth = 4
+	Padding = 2
+	Padchar = ' '
 )
 
 const (
@@ -22,8 +23,6 @@ const (
 )
 
 const dateFmt = "01/02/2006"
-
-var indent = bytes.Repeat([]byte(" "), tabwidth)
 
 type Entry interface {
 	Print(io.Writer) error
@@ -48,6 +47,7 @@ func (t *Trans) AddPost(p *Post) {
 }
 
 func (t *Trans) Print(w io.Writer) error {
+	indent := strings.Repeat(" ", Tabwidth)
 	_, err := fmt.Fprintf(w, "%v %v %v\n", t.Date.Format(dateFmt), t.Status, t.Payee)
 	if err != nil {
 		return err
@@ -59,9 +59,10 @@ func (t *Trans) Print(w io.Writer) error {
 		}
 	}
 
-	tw := tabwriter.NewWriter(w, minwidth, tabwidth, padding, padchar, 0)
+	tw := tabwriter.NewWriter(w, Minwidth, Tabwidth, Padding, Padchar, 0)
 	for _, p := range t.Posts {
-		if err := p.Print(tw); err != nil {
+		s := strings.Replace(p.String(), "\n", "\n" + indent, -1)
+		if _, err := fmt.Fprintf(tw, "%s%s\n", indent, s); err != nil {
 			return err
 		}
 	}
@@ -73,8 +74,7 @@ type Post struct {
 	trans *Trans
 	Account string
 	status string
-	Commod string
-	Qty float64
+	Value *Price
 	Comments []string
 }
 
@@ -85,21 +85,31 @@ func (p *Post) Status() string {
 	return p.trans.Status
 }
 
-func (p *Post) Print(w io.Writer) error {
-	if _, err := w.Write(indent); err != nil {
-		return err
-	}
-
+func (p *Post) String() string {
+	var buf bytes.Buffer
 	if p.status != "" {
-		fmt.Fprintf(w, "%v ", p.status)
+		fmt.Fprintf(&buf, "%s %s\t%s", p.status, p.Account, p.Value)
+	} else {
+		fmt.Fprintf(&buf, "%s\t%s", p.Account, p.Value)
 	}
-	fmt.Fprintf(w, "%v\t%v%v\n", p.Account, p.Commod, p.Qty)
 
+	indent := strings.Repeat(" ", Tabwidth)
 	for _, c := range p.Comments {
-		if _, err := fmt.Fprintf(w, "%s%s; %v\n", indent, indent, c); err != nil {
-			return err
-		}
+		fmt.Fprintf(&buf, "\n%s; %v", indent, c)
 	}
-	return nil
+	return buf.String()
+}
+
+type Price struct {
+	Commod string
+	Prefix bool // is commodity prefix or postfix
+	Qty float64
+}
+
+func (p *Price) String() string {
+	if p.Prefix {
+		return fmt.Sprintf("%v%v", p.Commod, p.Qty)
+	}
+	return fmt.Sprintf("%v %v", p.Qty, p.Commod)
 }
 
