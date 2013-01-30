@@ -24,9 +24,24 @@ const (
 
 const dateFmt = "01/02/2006"
 
+type Journal []Entry
+
 type Entry interface {
 	Print(io.Writer) error
 	Type() string
+}
+
+type MiscEntry struct {
+	Content string
+}
+
+func (e *MiscEntry) Print(w io.Writer) error {
+	_, err := fmt.Fprint(w, e.Content)
+	return err
+}
+
+func (e *MiscEntry) Type() string {
+	return UnknownEntry
 }
 
 type Trans struct {
