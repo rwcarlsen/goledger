@@ -89,8 +89,10 @@ func (l *lexer) backup() {
 
 // emit passes a token back to the client.
 func (l *lexer) emit(t tokType) {
-	l.tokens <- token{t, l.start, l.input[l.start:l.pos]}
-	l.start = l.pos
+	if len(strings.TrimSpace(l.input[l.start:l.pos])) > 0 {
+		l.tokens <- token{t, l.start, l.input[l.start:l.pos]}
+		l.start = l.pos
+	}
 }
 
 // ignore skips over the pending input before this point.
@@ -128,6 +130,7 @@ func (l *lexer) acceptRun(valid string) {
 func (l *lexer) acceptRunNot(invalid string) {
 	r := l.next()
 	for strings.IndexRune(invalid, r) < 0 && r != eof {
+		r = l.next()
 	}
 	l.backup()
 }
@@ -155,9 +158,7 @@ func (l *lexer) nextItem() token {
 
 // run runs the state machine for the lexer.
 func (l *lexer) run() {
-	fmt.Println("running")
 	for l.state = lexLineStart; l.state != nil; {
-		fmt.Println("------- changed state -------")
 		l.state = l.state(l)
 	}
 }
@@ -177,36 +178,27 @@ const (
 // inbetween as tokText
 func lexLineStart(l *lexer) stateFn {
 	for {
-		fmt.Printf("lexing at line %v: %v\n", l.lineNumber(), l.input[l.pos:l.pos+10])
 		switch r := l.peek(); {
-		case l.input[l.pos:l.pos] == commentDelim: // comment
-			if l.pos > l.start {
-				l.emit(tokText)
-			}
+		case string(r) == commentDelim: // comment
+			l.emit(tokText)
 			return lexComment
 		case unicode.IsDigit(r): // begin of new transaction
-			if l.pos > l.start {
-				l.emit(tokText)
-			}
+			l.emit(tokText)
 			return lexTransHead
 		case isSpace(r):
-			if l.pos > l.start {
-				l.emit(tokText)
-			}
+			l.emit(tokText)
 			l.acceptRun(space) // ignore prefixed space to sub-indented lines
 			l.ignore()
 			return lexSub
 		default: // each loop iteration begins with 1st char of new line
 			l.acceptRunNot(lineend + commentDelim)
 		}
-		if l.next() == eof {
+		if r := l.next(); r == eof {
 			break
 		}
 	}
 	// Correctly reached EOF.
-	if l.pos > l.start {
-		l.emit(tokText)
-	}
+	l.emit(tokText)
 	l.emit(tokEOF)
 	return nil
 }
@@ -214,7 +206,9 @@ func lexLineStart(l *lexer) stateFn {
 // lexComment scans a comment to the end of the line and ignores it
 func lexComment(l *lexer) stateFn {
 	l.pos += len(commentDelim)
+	l.ignore()
 	l.acceptNot(lineend)
+	l.acceptRun(lineend)
 	l.emit(tokComment)
 	return lexLineStart
 }
@@ -222,6 +216,7 @@ func lexComment(l *lexer) stateFn {
 // lexTransRef scans a transaction
 func lexTransHead(l *lexer) stateFn {
 	l.acceptRunNot(lineend + commentDelim)
+	l.acceptRun(lineend)
 	l.emit(tokTransHead)
 	return lexLineStart
 }
@@ -229,6 +224,7 @@ func lexTransHead(l *lexer) stateFn {
 // lexSub scans a sub/indented line (e.g. a transaction post)
 func lexSub(l *lexer) stateFn {
 	l.acceptRunNot(lineend + commentDelim)
+	l.acceptRun(lineend)
 	l.emit(tokSub)
 	return lexLineStart
 }
@@ -237,4 +233,10 @@ func lexSub(l *lexer) stateFn {
 func isSpace(r rune) bool {
 	return r == ' ' || r == '\t'
 }
+
+// isEndOfLine
+func isEndOfLine(r rune) bool {
+	return r == '\r' || r == '\n'
+}
+
 

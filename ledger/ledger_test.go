@@ -8,10 +8,6 @@ import (
 	"fmt"
 )
 
-func init() {
-	fmt.Println("spot0")
-}
-
 func trans1() *Trans {
 	trans := &Trans{
 		Date: time.Now(),
@@ -36,9 +32,7 @@ func trans1() *Trans {
 }
 
 func TestTransPrint(t *testing.T) {
-	fmt.Println("spot1")
 	trans := trans1()
-	fmt.Println("spot2")
 
 	var buf bytes.Buffer
 	if err := trans.Print(&buf); err != nil {
@@ -54,7 +48,6 @@ func TestJournalLex(t *testing.T) {
 	if err := trans.Print(&buf); err != nil {
 		t.Error(err)
 	}
-	fmt.Println("hello")
 
 	l := newLexer("trans1", buf.String())
 
