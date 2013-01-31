@@ -25,7 +25,10 @@ type token struct {
 func (t *token) String() string {
 	switch t.typ {
 	case tokDate:
+		return t.val
 	case tokComment:
+		return t.val
+	// ... etc
 	}
 }
 
