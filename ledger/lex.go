@@ -117,7 +117,6 @@ func (l *lexer) acceptNot(invalid string) bool {
 	return true
 }
 
-
 // acceptRun consumes a run of runes from the valid set.
 func (l *lexer) acceptRun(valid string) {
 	for strings.IndexRune(valid, l.next()) >= 0 {
@@ -156,7 +155,9 @@ func (l *lexer) nextItem() token {
 
 // run runs the state machine for the lexer.
 func (l *lexer) run() {
+	fmt.Println("running")
 	for l.state = lexLineStart; l.state != nil; {
+		fmt.Println("------- changed state -------")
 		l.state = l.state(l)
 	}
 }
@@ -176,6 +177,7 @@ const (
 // inbetween as tokText
 func lexLineStart(l *lexer) stateFn {
 	for {
+		fmt.Printf("lexing at line %v: %v\n", l.lineNumber(), l.input[l.pos:l.pos+10])
 		switch r := l.peek(); {
 		case l.input[l.pos:l.pos] == commentDelim: // comment
 			if l.pos > l.start {

@@ -8,7 +8,11 @@ import (
 	"fmt"
 )
 
-func TestTransPrint(t *testing.T) {
+func init() {
+	fmt.Println("spot0")
+}
+
+func trans1() *Trans {
 	trans := &Trans{
 		Date: time.Now(),
 		Status: "*",
@@ -28,12 +32,36 @@ func TestTransPrint(t *testing.T) {
 		Account: "expenses:food",
 		Value: &Price{"$", true, 13.34},
 	})
+	return trans
+}
+
+func TestTransPrint(t *testing.T) {
+	fmt.Println("spot1")
+	trans := trans1()
+	fmt.Println("spot2")
 
 	var buf bytes.Buffer
-
 	if err := trans.Print(&buf); err != nil {
 		t.Error(err)
 	}
 
 	fmt.Println(buf.String())
+}
+
+func TestJournalLex(t *testing.T) {
+	trans := trans1()
+	var buf bytes.Buffer
+	if err := trans.Print(&buf); err != nil {
+		t.Error(err)
+	}
+	fmt.Println("hello")
+
+	l := newLexer("trans1", buf.String())
+
+	go l.run()
+
+	for tok := range l.tokens {
+		fmt.Println("------ token -------")
+		fmt.Println(tok)
+	}
 }
