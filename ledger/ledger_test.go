@@ -35,10 +35,11 @@ func trans1() *Trans {
 
 const trans2 = `
 2009/05/14  * Gas Station
+	; blablabla a transaction comment
     Assets:Westmark Checking                  $-5.32
-    ; gas
+    ; used a debit card to pay
     Expenses:Transportation:Gas
-    ; gas
+    ; topped of tank
 `
 
 func DISABLE_TestTransPrint(t *testing.T) {
