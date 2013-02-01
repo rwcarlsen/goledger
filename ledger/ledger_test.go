@@ -31,7 +31,15 @@ func trans1() *Trans {
 	return trans
 }
 
-func TestTransPrint(t *testing.T) {
+const trans2 = `
+2009/05/14  * Gas Station
+    Assets:Westmark Checking                  $-5.32
+    ; gas
+    Expenses:Transportation:Gas
+    ; gas
+`
+
+func DISABLE_TestTransPrint(t *testing.T) {
 	trans := trans1()
 
 	var buf bytes.Buffer
@@ -43,18 +51,9 @@ func TestTransPrint(t *testing.T) {
 }
 
 func TestJournalLex(t *testing.T) {
-	trans := trans1()
-	var buf bytes.Buffer
-	if err := trans.Print(&buf); err != nil {
-		t.Error(err)
-	}
-
-	l := newLexer("trans1", buf.String())
-
-	go l.run()
+	l := newLexer("trans2", trans2)
 
 	for tok := range l.tokens {
-		fmt.Println("------ token -------")
-		fmt.Println(tok)
+		t.Logf("------ token %v -------\n'''%v'''\n", tokNames[tok.typ], tok.val)
 	}
 }

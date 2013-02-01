@@ -4,7 +4,6 @@ package ledger
 import (
 	"fmt"
 	"strings"
-	"unicode"
 	"unicode/utf8"
 )
 
@@ -13,11 +12,22 @@ type tokType int
 const (
 	tokError tokType = iota
 	tokEOF
-	tokTransHead
-	tokComment // comments
-	tokSub
-	tokText // unsupported/unrecognized text
+	tokNewline
+	tokIndent // tab, multispace, etc
+	tokDate // 
+	tokText // trans header, comment text, etc.
+	tokMeta // comments
 )
+
+var tokNames = map[tokType]string{
+	tokError: "Error",
+	tokEOF: "EOF",
+	tokNewline: "Newline",
+	tokIndent: "Indent",
+	tokDate: "Date",
+	tokText: "Text",
+	tokMeta: "Meta",
+}
 
 type token struct {
 	typ tokType
@@ -89,10 +99,9 @@ func (l *lexer) backup() {
 
 // emit passes a token back to the client.
 func (l *lexer) emit(t tokType) {
-	if len(strings.TrimSpace(l.input[l.start:l.pos])) > 0 {
-		l.tokens <- token{t, l.start, l.input[l.start:l.pos]}
-		l.start = l.pos
-	}
+	tok := token{t, l.start, l.input[l.start:l.pos]}
+	l.tokens <-tok
+	l.start = l.pos
 }
 
 // ignore skips over the pending input before this point.
@@ -158,85 +167,9 @@ func (l *lexer) nextItem() token {
 
 // run runs the state machine for the lexer.
 func (l *lexer) run() {
-	for l.state = lexLineStart; l.state != nil; {
+	for l.state = lexStart; l.state != nil; {
 		l.state = l.state(l)
 	}
+	close(l.tokens)
 }
-
-/////////////////// state functions ///////////////////////
-
-const (
-	digit = "0123456789"
-	alpha = "abcdefghijklmnopqrstuvwxyz" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-	space = " \t"
-	lineend = "\r\n"
-	commentDelim = ";"
-	eof = -1
-)
-
-// lexLineStart looks for a comment or a transaction, it emits everything
-// inbetween as tokText
-func lexLineStart(l *lexer) stateFn {
-	for {
-		switch r := l.peek(); {
-		case string(r) == commentDelim: // comment
-			l.emit(tokText)
-			return lexComment
-		case unicode.IsDigit(r): // begin of new transaction
-			l.emit(tokText)
-			return lexTransHead
-		case isSpace(r):
-			l.emit(tokText)
-			l.acceptRun(space) // ignore prefixed space to sub-indented lines
-			l.ignore()
-			return lexSub
-		default: // each loop iteration begins with 1st char of new line
-			l.acceptRunNot(lineend + commentDelim)
-		}
-		if r := l.next(); r == eof {
-			break
-		}
-	}
-	// Correctly reached EOF.
-	l.emit(tokText)
-	l.emit(tokEOF)
-	return nil
-}
-
-// lexComment scans a comment to the end of the line and ignores it
-func lexComment(l *lexer) stateFn {
-	l.pos += len(commentDelim)
-	l.ignore()
-	l.acceptNot(lineend)
-	l.acceptRun(lineend)
-	l.emit(tokComment)
-	return lexLineStart
-}
-
-// lexTransRef scans a transaction
-func lexTransHead(l *lexer) stateFn {
-	l.acceptRunNot(lineend + commentDelim)
-	l.acceptRun(lineend)
-	l.emit(tokTransHead)
-	return lexLineStart
-}
-
-// lexSub scans a sub/indented line (e.g. a transaction post)
-func lexSub(l *lexer) stateFn {
-	l.acceptRunNot(lineend + commentDelim)
-	l.acceptRun(lineend)
-	l.emit(tokSub)
-	return lexLineStart
-}
-
-// isSpace reports whether r is a spacing character
-func isSpace(r rune) bool {
-	return r == ' ' || r == '\t'
-}
-
-// isEndOfLine
-func isEndOfLine(r rune) bool {
-	return r == '\r' || r == '\n'
-}
-
 
