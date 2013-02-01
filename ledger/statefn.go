@@ -3,7 +3,26 @@ package ledger
 
 import (
 	"unicode"
+	"github.com/rwcarlsen/goledger/lexer"
 )
+
+const (
+	tokNewline lexer.TokType = iota
+	tokIndent // tab, multispace, etc
+	tokDate // 
+	tokText // trans header, comment text, etc.
+	tokMeta // comments
+)
+
+var tokNames = map[lexer.TokType]string{
+	lexer.TokError: "Error",
+	lexer.TokEOF: "EOF",
+	tokNewline: "Newline",
+	tokIndent: "Indent",
+	tokDate: "Date",
+	tokText: "Text",
+	tokMeta: "Meta",
+}
 
 /////////////////// state functions ///////////////////////
 
@@ -12,20 +31,12 @@ const (
 	lineend = "\r\n"
 	whitespace = indent + lineend
 	metaDelim = ";"
-	eof = -1
 )
 
-func min(x, y int) int {
-	if x < y {
-		return x
-	}
-	return y
-}
-
-// lexLineStart looks for a comment or a transaction, it emits everything
+// lexStart looks for a comment or a transaction, it emits everything
 // inbetween as tokText
-func lexStart(l *lexer) stateFn {
-	switch r := l.peek(); {
+func lexStart(l *lexer.Lexer) lexer.StateFn {
+	switch r := l.Peek(); {
 	case string(r) == metaDelim:
 		return lexMeta
 	case isEndOfLine(r):
@@ -34,44 +45,44 @@ func lexStart(l *lexer) stateFn {
 		return lexDate
 	case isSpace(r):
 		return lexIndent
-	case r == eof:
+	case r == lexer.EOF:
 		break
 	default:
 		return lexText
 	}
-	l.emit(tokEOF)
+	l.Emit(lexer.TokEOF)
 	return nil
 }
 
-func lexDate(l *lexer) stateFn {
-	l.acceptRunNot(whitespace + metaDelim)
-	l.emit(tokDate)
+func lexDate(l *lexer.Lexer) lexer.StateFn {
+	l.AcceptRunNot(whitespace + metaDelim)
+	l.Emit(tokDate)
 	return lexText
 }
 
-func lexText(l *lexer) stateFn {
-	l.acceptRunNot(lineend + metaDelim)
-	if l.pos > l.start {
-		l.emit(tokText)
+func lexText(l *lexer.Lexer) lexer.StateFn {
+	l.AcceptRunNot(lineend + metaDelim)
+	if l.Pos > l.Start {
+		l.Emit(tokText)
 	}
 	return lexStart
 }
 
-func lexMeta(l *lexer) stateFn {
-	l.pos += len(metaDelim)
-	l.emit(tokMeta)
+func lexMeta(l *lexer.Lexer) lexer.StateFn {
+	l.Pos += len(metaDelim)
+	l.Emit(tokMeta)
 	return lexText
 }
 
-func lexLineEnd(l *lexer) stateFn {
-	l.pos += 1
-	l.emit(tokNewline)
+func lexLineEnd(l *lexer.Lexer) lexer.StateFn {
+	l.Pos += 1
+	l.Emit(tokNewline)
 	return lexStart
 }
 
-func lexIndent(l *lexer) stateFn {
-	l.acceptRun(indent)
-	l.emit(tokIndent)
+func lexIndent(l *lexer.Lexer) lexer.StateFn {
+	l.AcceptRun(indent)
+	l.Emit(tokIndent)
 	return lexText
 }
 

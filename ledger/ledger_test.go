@@ -6,6 +6,8 @@ import (
 	"time"
 	"bytes"
 	"fmt"
+
+	"github.com/rwcarlsen/goledger/lexer"
 )
 
 func trans1() *Trans {
@@ -51,9 +53,8 @@ func DISABLE_TestTransPrint(t *testing.T) {
 }
 
 func TestJournalLex(t *testing.T) {
-	l := newLexer("trans2", trans2)
-
-	for tok := range l.tokens {
-		t.Logf("------ token %v -------\n'''%v'''\n", tokNames[tok.typ], tok.val)
+	l := lexer.New("trans2", trans2, lexStart)
+	for tok := range l.Tokens {
+		t.Logf("------ token %v -------\n'''%v'''\n", tokNames[tok.Type], tok.Val)
 	}
 }
