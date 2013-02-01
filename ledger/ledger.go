@@ -8,6 +8,8 @@ import (
 	"text/tabwriter"
 	"bytes"
 	"strings"
+
+	"github.com/rwcarlsen/goledger/lex"
 )
 
 const (
@@ -24,7 +26,18 @@ const (
 
 const dateFmt = "01/02/2006"
 
-type Journal []Entry
+type Journal struct {
+	Entries []Entry
+}
+
+func (j *Journal) Add(e ...Entry) {
+	j.Entries = append(j.Entries, e...)
+}
+
+func Decode(name string, data []byte) (*Journal, error) {
+	l := lex.New(name, trans2, lexStart)
+	return parse(l)
+}
 
 type Entry interface {
 	Print(io.Writer) error
