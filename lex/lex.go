@@ -1,5 +1,5 @@
 
-package lexer
+package lex
 
 import (
 	"fmt"

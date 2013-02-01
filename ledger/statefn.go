@@ -3,20 +3,20 @@ package ledger
 
 import (
 	"unicode"
-	"github.com/rwcarlsen/goledger/lexer"
+	"github.com/rwcarlsen/goledger/lex"
 )
 
 const (
-	tokNewline lexer.TokType = iota
+	tokNewline lex.TokType = iota
 	tokIndent // tab, multispace, etc
 	tokDate // 
 	tokText // trans header, comment text, etc.
 	tokMeta // comments
 )
 
-var tokNames = map[lexer.TokType]string{
-	lexer.TokError: "Error",
-	lexer.TokEOF: "EOF",
+var tokNames = map[lex.TokType]string{
+	lex.TokError: "Error",
+	lex.TokEOF: "EOF",
 	tokNewline: "Newline",
 	tokIndent: "Indent",
 	tokDate: "Date",
@@ -35,7 +35,7 @@ const (
 
 // lexStart looks for a comment or a transaction, it emits everything
 // inbetween as tokText
-func lexStart(l *lexer.Lexer) lexer.StateFn {
+func lexStart(l *lex.Lexer) lex.StateFn {
 	switch r := l.Peek(); {
 	case string(r) == metaDelim:
 		return lexMeta
@@ -45,22 +45,22 @@ func lexStart(l *lexer.Lexer) lexer.StateFn {
 		return lexDate
 	case isSpace(r):
 		return lexIndent
-	case r == lexer.EOF:
+	case r == lex.EOF:
 		break
 	default:
 		return lexText
 	}
-	l.Emit(lexer.TokEOF)
+	l.Emit(lex.TokEOF)
 	return nil
 }
 
-func lexDate(l *lexer.Lexer) lexer.StateFn {
+func lexDate(l *lex.Lexer) lex.StateFn {
 	l.AcceptRunNot(whitespace + metaDelim)
 	l.Emit(tokDate)
 	return lexText
 }
 
-func lexText(l *lexer.Lexer) lexer.StateFn {
+func lexText(l *lex.Lexer) lex.StateFn {
 	l.AcceptRunNot(lineend + metaDelim)
 	if l.Pos > l.Start {
 		l.Emit(tokText)
@@ -68,19 +68,19 @@ func lexText(l *lexer.Lexer) lexer.StateFn {
 	return lexStart
 }
 
-func lexMeta(l *lexer.Lexer) lexer.StateFn {
+func lexMeta(l *lex.Lexer) lex.StateFn {
 	l.Pos += len(metaDelim)
 	l.Emit(tokMeta)
 	return lexText
 }
 
-func lexLineEnd(l *lexer.Lexer) lexer.StateFn {
+func lexLineEnd(l *lex.Lexer) lex.StateFn {
 	l.Pos += 1
 	l.Emit(tokNewline)
 	return lexStart
 }
 
-func lexIndent(l *lexer.Lexer) lexer.StateFn {
+func lexIndent(l *lex.Lexer) lex.StateFn {
 	l.AcceptRun(indent)
 	l.Emit(tokIndent)
 	return lexText
