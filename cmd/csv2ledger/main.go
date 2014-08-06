@@ -15,7 +15,7 @@ var fieldmsg = `comma separated order of fields in csv file. Valid fields:
     date, payee, amount, and note.`
 
 var (
-	fieldspec = flag.String("fields", "", fieldmsg)
+	fieldspec = flag.String("fields", ",date,,note,amount,", fieldmsg)
 	date      = flag.String("date", "1/2/2006", "format of dates in csv file")
 	account   = flag.String("account", "Assets:", "account of all the transactions")
 	category  = flag.String("category", "Expenses:", "category (expense/income) account")
@@ -65,7 +65,7 @@ func main() {
 			log.Fatal(err)
 		}
 
-		fmt.Printf("%v %v ; \n", t.Format("2006/01/02"), vals["payee"])
+		fmt.Printf("%v %v \n", t.Format("2006/01/02"), vals["payee"])
 		fmt.Printf("    %v        $%.2f\n", *account, amt)
 		fmt.Printf("    ; %v\n", vals["note"])
 		fmt.Printf("    %v\n\n", *category)
