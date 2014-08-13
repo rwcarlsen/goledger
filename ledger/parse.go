@@ -1,4 +1,3 @@
-
 package ledger
 
 import (
@@ -8,19 +7,19 @@ import (
 )
 
 type node struct {
-	tok lex.Token
+	tok      lex.Token
 	children []*node
 }
 
 type parser struct {
 	tokens chan lex.Token
 	bucket []lex.Token
-	tree *node
-	Journ *Journal
+	tree   *node
+	Journ  *Journal
 }
 
 func (p *parser) Next() lex.Token {
-	return <- p.tokens
+	return <-p.tokens
 }
 
 func (p *parser) Push(tok lex.Token) {
@@ -28,7 +27,7 @@ func (p *parser) Push(tok lex.Token) {
 }
 
 func (p *parser) Pop() lex.Token {
-	end := len(p.bucket)-1
+	end := len(p.bucket) - 1
 	tok := p.bucket[end]
 	p.bucket = p.bucket[:end]
 	return tok
@@ -36,7 +35,7 @@ func (p *parser) Pop() lex.Token {
 
 type parseFn func(p *parser) (parseFn, node, error)
 
-func parse(l *lex.Lexer) (Journal, error) {
+func parse(l *lex.Lexer) (*Journal, error) {
 	var err error
 	p := &parser{
 		tokens: l.Tokens,
@@ -56,7 +55,8 @@ func parse(l *lex.Lexer) (Journal, error) {
 			stack = append(stack, state)
 		}
 		if node != nil {
-			p.tree:w
+			p.tree
+		}
 	}
 	return j, nil
 }
@@ -86,4 +86,3 @@ func parseTrans(p *parser) (parseFn, error) {
 	case tokNewline:
 	}
 }
-

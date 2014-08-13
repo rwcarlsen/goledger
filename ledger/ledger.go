@@ -34,7 +34,7 @@ func (j *Journal) Add(e ...Entry) {
 }
 
 func Decode(name string, data []byte) (*Journal, error) {
-	l := lex.New(name, trans2, lexStart)
+	l := lex.New(name, string(data), lexStart)
 	return parse(l)
 }
 

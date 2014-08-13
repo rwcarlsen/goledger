@@ -10,7 +10,7 @@ type TokType int
 
 const (
 	TokError TokType = iota - 2
-	TokEOF   TokType = iota - 2
+	TokEOF
 )
 
 const EOF = -1
@@ -96,7 +96,8 @@ func (l *Lexer) Ignore() {
 	l.Start = l.Pos
 }
 
-// Accept consumes the next rune if it's from the valid set.
+// Accept consumes the next rune if it's from the valid set and returns true
+// if a rune was consumed.
 func (l *Lexer) Accept(valid string) bool {
 	if strings.IndexRune(valid, l.Next()) >= 0 {
 		return true
@@ -105,7 +106,8 @@ func (l *Lexer) Accept(valid string) bool {
 	return false
 }
 
-// AcceptNot consumes the next rune if it's not from the invalid set.
+// AcceptNot consumes the next rune if it's not from the invalid set and
+// returns true if a rune was consumed.
 func (l *Lexer) AcceptNot(invalid string) bool {
 	r := l.Next()
 	if strings.IndexRune(invalid, r) >= 0 || r == EOF {
@@ -115,20 +117,26 @@ func (l *Lexer) AcceptNot(invalid string) bool {
 	return true
 }
 
-// AcceptRun consumes a run of runes from the valid set.
-func (l *Lexer) AcceptRun(valid string) {
+// AcceptRun consumes a run of runes from the valid set and returns the number
+// of runes accepted.
+func (l *Lexer) AcceptRun(valid string) int {
+	x := l.Pos
 	for strings.IndexRune(valid, l.Next()) >= 0 {
 	}
 	l.Backup()
+	return l.Pos - x
 }
 
-// AcceptRunNot consumes a run of runes that aren't from the invalid set.
-func (l *Lexer) AcceptRunNot(invalid string) {
+// AcceptRunNot consumes a run of runes that aren't from the invalid set and
+// returns the number of runes accepted.
+func (l *Lexer) AcceptRunNot(invalid string) int {
+	x := l.Pos
 	r := l.Next()
 	for strings.IndexRune(invalid, r) < 0 && r != EOF {
 		r = l.Next()
 	}
 	l.Backup()
+	return l.Pos - x
 }
 
 // LineNumber reports which line we're on, based on the position of
