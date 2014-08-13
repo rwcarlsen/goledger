@@ -1,4 +1,3 @@
-
 package lex
 
 import (
@@ -11,15 +10,15 @@ type TokType int
 
 const (
 	TokError TokType = iota - 2
-	TokEOF TokType = iota - 2
+	TokEOF   TokType = iota - 2
 )
 
 const EOF = -1
 
 type Token struct {
 	Type TokType
-	Pos int
-	Val string
+	Pos  int
+	Val  string
 }
 
 func (t *Token) String() string {
@@ -39,23 +38,23 @@ type StateFn func(*Lexer) StateFn
 
 // Lexer holds the state of the scanner.
 type Lexer struct {
-	name       string    // the name of the input; used only for error reports
-	Input      string    // the string being scanned
-	state      StateFn   // the next lexing function to enter
-	Pos        int       // current position in the input
-	Start      int       // start position of this Token
-	width      int       // width of last rune read from input
-	lastPos    int       // position of most recent Token returned by nextItem
-	Tokens     chan Token // channel of scanned Tokens
+	name    string     // the name of the input; used only for error reports
+	Input   string     // the string being scanned
+	state   StateFn    // the next lexing function to enter
+	Pos     int        // current position in the input
+	Start   int        // start position of this Token
+	width   int        // width of last rune read from input
+	lastPos int        // position of most recent Token returned by nextItem
+	Tokens  chan Token // channel of scanned Tokens
 }
 
 // New creates a new scanner for the input string and begins lexing imediately,
 // concurrently.
 func New(name, input string, start StateFn) *Lexer {
 	l := &Lexer{
-		name:       name,
-		Input:      input,
-		Tokens:      make(chan Token),
+		name:   name,
+		Input:  input,
+		Tokens: make(chan Token),
 	}
 	go l.run(start)
 	return l
@@ -88,7 +87,7 @@ func (l *Lexer) Backup() {
 // emit passes a Token back to the client.
 func (l *Lexer) Emit(t TokType) {
 	tok := Token{t, l.Start, l.Input[l.Start:l.Pos]}
-	l.Tokens <-tok
+	l.Tokens <- tok
 	l.Start = l.Pos
 }
 
@@ -160,4 +159,3 @@ func (l *Lexer) run(start StateFn) {
 	}
 	close(l.Tokens)
 }
-

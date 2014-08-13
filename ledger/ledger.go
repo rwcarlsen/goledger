@@ -1,13 +1,12 @@
-
 package ledger
 
 import (
-	"io"
-	"fmt"
-	"time"
-	"text/tabwriter"
 	"bytes"
+	"fmt"
+	"io"
 	"strings"
+	"text/tabwriter"
+	"time"
 
 	"github.com/rwcarlsen/goledger/lex"
 )
@@ -15,12 +14,12 @@ import (
 const (
 	Minwidth = 4
 	Tabwidth = 4
-	Padding = 2
-	Padchar = ' '
+	Padding  = 2
+	Padchar  = ' '
 )
 
 const (
-	TransEntry = "Transaction"
+	TransEntry   = "Transaction"
 	UnknownEntry = "Unknown"
 )
 
@@ -58,11 +57,11 @@ func (e *MiscEntry) Type() string {
 }
 
 type Trans struct {
-	Date time.Time
-	Status string
-	Payee string
+	Date     time.Time
+	Status   string
+	Payee    string
 	Comments []string
-	Posts []*Post
+	Posts    []*Post
 }
 
 func (t *Trans) Type() string {
@@ -89,7 +88,7 @@ func (t *Trans) Print(w io.Writer) error {
 
 	tw := tabwriter.NewWriter(w, Minwidth, Tabwidth, Padding, Padchar, 0)
 	for _, p := range t.Posts {
-		s := strings.Replace(p.String(), "\n", "\n" + indent, -1)
+		s := strings.Replace(p.String(), "\n", "\n"+indent, -1)
 		if _, err := fmt.Fprintf(tw, "%s%s\n", indent, s); err != nil {
 			return err
 		}
@@ -99,10 +98,10 @@ func (t *Trans) Print(w io.Writer) error {
 }
 
 type Post struct {
-	trans *Trans
-	Account string
-	status string
-	Value *Price
+	trans    *Trans
+	Account  string
+	status   string
+	Value    *Price
 	Comments []string
 }
 
@@ -131,7 +130,7 @@ func (p *Post) String() string {
 type Price struct {
 	Commod string
 	Prefix bool // is commodity prefix or postfix
-	Qty float64
+	Qty    float64
 }
 
 func (p *Price) String() string {
@@ -140,4 +139,3 @@ func (p *Price) String() string {
 	}
 	return fmt.Sprintf("%v %v", p.Qty, p.Commod)
 }
-

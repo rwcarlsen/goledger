@@ -1,36 +1,39 @@
-
 package ledger
 
 import (
 	"unicode"
+
 	"github.com/rwcarlsen/goledger/lex"
 )
 
 const (
 	tokNewline lex.TokType = iota
-	tokIndent // tab, multispace, etc
-	tokDate // 
-	tokText // trans header, comment text, etc.
-	tokMeta // comments
+	tokIndent              // tab, multispace, etc
+	tokDate                //
+	tokText                // trans header, comment text, etc.
+	tokMeta                // comments
 )
 
 var tokNames = map[lex.TokType]string{
 	lex.TokError: "Error",
-	lex.TokEOF: "EOF",
-	tokNewline: "Newline",
-	tokIndent: "Indent",
-	tokDate: "Date",
-	tokText: "Text",
-	tokMeta: "Meta",
+	lex.TokEOF:   "EOF",
+	tokNewline:   "Newline",
+	tokIndent:    "Indent",
+	tokDate:      "Date",
+	tokText:      "Text",
+	tokMeta:      "Meta",
 }
 
 /////////////////// state functions ///////////////////////
 
 const (
-	indent = " \t"
-	lineend = "\r\n"
+	indent     = " \t"
+	lineend    = "\r\n"
 	whitespace = indent + lineend
-	metaDelim = ";"
+)
+
+const (
+	commentStart = ";"
 )
 
 // lexStart looks for a comment or a transaction, it emits everything
@@ -95,5 +98,3 @@ func isSpace(r rune) bool {
 func isEndOfLine(r rune) bool {
 	return r == '\r' || r == '\n'
 }
-
-
