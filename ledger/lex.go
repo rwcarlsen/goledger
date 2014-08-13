@@ -55,18 +55,38 @@ func lexStart(l *lex.Lexer) lex.StateFn {
 	switch r := l.Peek(); {
 	case string(r) == meta:
 		return lexMeta
-	case isEndOfLine(r):
-		return lexLineEnd
 	case unicode.IsDigit(r):
-		return lexDate
+		return lexTrans
+	case isWhitespace(r):
+		l.Push(lexStart)
+		return lexBlankLine
 	case isSpace(r):
 		return lexIndent
 	case r == lex.EOF:
-		break
+		l.Emit(lex.TokEOF)
+		return nil
 	default:
-		return lexText
+		l.Errorf("Unexpected text on line %v", l.LineNumber())
+		l.Push(lexStart)
+		return lexSkipLine
 	}
-	l.Emit(lex.TokEOF)
+}
+
+func lexSkipLine(l *lex.Lexer) lex.StateFn {
+	l.AcceptRunNot(lineend)
+	l.AcceptRun(lineend)
+	l.Ignore()
+	return nil
+}
+
+func lexBlankLine(l *lex.Lexer) lex.StateFn {
+	l.AcceptRun(indent)
+	l.Ignore()
+
+	if l.AcceptRun(lineend) == 0 {
+		l.Errorf("unexpected non-blank line at line %v", l.LineNumber())
+		return lexSkipLine
+	}
 	return nil
 }
 
@@ -180,7 +200,11 @@ func isSpace(r rune) bool {
 	return r == ' ' || r == '\t'
 }
 
-// isEndOfLine
-func isEndOfLine(r rune) bool {
+func isWhitespace(r rune) bool {
+	return isSpace(r) || isLineEnd(r)
+}
+
+// isLineEnd
+func isLineEnd(r rune) bool {
 	return r == '\r' || r == '\n'
 }

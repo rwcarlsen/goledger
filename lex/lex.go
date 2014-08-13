@@ -40,7 +40,7 @@ type StateFn func(*Lexer) StateFn
 type Lexer struct {
 	name    string     // the name of the input; used only for error reports
 	Input   string     // the string being scanned
-	state   StateFn    // the next lexing function to enter
+	states  []StateFn  // the next lexing function to enter
 	Pos     int        // current position in the input
 	Start   int        // start position of this Token
 	width   int        // width of last rune read from input
@@ -150,6 +150,7 @@ func (l *Lexer) LineNumber() int {
 // back a nil pointer that will be the next state, terminating l.nextItem.
 func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
 	l.Tokens <- Token{TokError, l.Start, fmt.Sprintf(format, args...)}
+	l.Ignore()
 	return nil
 }
 
@@ -160,10 +161,26 @@ func (l *Lexer) nextItem() Token {
 	return Tok
 }
 
+func (l *Lexer) Push(s StateFn) {
+	l.states = append(l.states, s)
+}
+
+func (l *Lexer) pop() StateFn {
+	last := len(l.states) - 1
+	s := l.states[last]
+	l.states = l.states[:last]
+	return s
+}
+
 // run runs the state machine for the Lexer.
 func (l *Lexer) run(start StateFn) {
-	for l.state = start; l.state != nil; {
-		l.state = l.state(l)
+	l.Push(start)
+	for len(l.states) > 0 {
+		state := l.pop()
+		state = state(l)
+		if state != nil {
+			l.Push(state)
+		}
 	}
 	close(l.Tokens)
 }
