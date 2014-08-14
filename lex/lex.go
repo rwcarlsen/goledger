@@ -74,6 +74,9 @@ func (l *Lexer) Next() rune {
 
 // Peek returns but does not consume the next rune in the input.
 func (l *Lexer) Peek() rune {
+	if int(l.Pos) >= len(l.Input) {
+		return EOF
+	}
 	r := l.Next()
 	l.Backup()
 	return r

@@ -11,7 +11,7 @@ const (
 	tokDate                //
 	tokText                // trans header, comment text, etc.
 	tokMeta                // metadata/notes/comments
-	tokCleared
+	tokStatus
 	tokPayee
 	tokBeginTrans
 	tokEndTrans
@@ -30,7 +30,7 @@ var tokNames = map[lex.TokType]string{
 	tokDate:       "Date",
 	tokText:       "Text",
 	tokMeta:       "Meta",
-	tokCleared:    "Cleared",
+	tokStatus:     "Status",
 	tokPayee:      "Payee",
 	tokBeginTrans: "BeginTrans",
 	tokEndTrans:   "EndTrans",
@@ -49,13 +49,13 @@ const (
 	lineend    = "\r\n"
 	whitespace = indent + lineend
 	digit      = "0123456789"
+	statuss    = "*"
 )
 
 const (
 	meta = ";"
 	atat = "@@"
 	at   = "@"
-	star = "*"
 )
 
 // lexStart looks for a comment or a transaction, it emits everything
@@ -80,6 +80,7 @@ func lexStart(l *lex.Lexer) lex.StateFn {
 		return lexSkipLine
 	}
 }
+
 func lexTrans(l *lex.Lexer) lex.StateFn {
 	l.Emit(tokBeginTrans)
 
@@ -87,7 +88,7 @@ func lexTrans(l *lex.Lexer) lex.StateFn {
 	l.Push(lexItems)
 	l.Push(lexMeta)
 	l.Push(lexPayee)
-	l.Push(lexCleared)
+	l.Push(lexStatus)
 	return lexDate
 }
 
@@ -120,9 +121,11 @@ func lexDate(l *lex.Lexer) lex.StateFn {
 	return nil
 }
 
-func lexCleared(l *lex.Lexer) lex.StateFn {
-	if l.AcceptRun(star+indent) > 0 {
-		l.Emit(tokCleared)
+func lexStatus(l *lex.Lexer) lex.StateFn {
+	l.AcceptRun(indent)
+	l.Ignore()
+	if l.Accept(statuss) {
+		l.Emit(tokStatus)
 	}
 	return nil
 }
@@ -160,8 +163,8 @@ func lexAccount(l *lex.Lexer) lex.StateFn {
 	for {
 		nr := l.Next()
 		nnr := l.Peek()
-		l.Backup()
-		if isSpace(nr) && isSpace(nnr) || isNewline(nnr) {
+		if isSpace(nr) && isSpace(nnr) || isNewline(nr) {
+			l.Backup()
 			l.Emit(tokAccount)
 			l.AcceptRun(indent)
 			l.Ignore()
@@ -171,18 +174,24 @@ func lexAccount(l *lex.Lexer) lex.StateFn {
 }
 
 func lexAmount(l *lex.Lexer) lex.StateFn {
+	l.AcceptRun(indent)
+	l.Ignore()
+
 	if l.Accept("$") {
 		l.Emit(tokUnit)
 	}
+
 	l.AcceptRun(digit + ",")
 	l.Accept(".")
 	l.AcceptRun(digit)
-	l.Emit(tokAmount)
+	if l.Pos > l.Start {
+		l.Emit(tokAmount)
+	}
 	return lexCommod
 }
 
 func lexCommod(l *lex.Lexer) lex.StateFn {
-	l.AcceptRun(whitespace)
+	l.AcceptRun(indent)
 	l.Ignore()
 	if l.AcceptRunNot(whitespace+meta+at) > 0 {
 		l.Emit(tokCommod)
@@ -202,13 +211,6 @@ func lexAt(l *lex.Lexer) lex.StateFn {
 	return nil
 }
 
-func lexSkipLine(l *lex.Lexer) lex.StateFn {
-	l.AcceptRunNot(lineend)
-	l.AcceptRun(lineend)
-	l.Ignore()
-	return nil
-}
-
 func lexBlankLine(l *lex.Lexer) lex.StateFn {
 	l.AcceptRun(indent)
 	l.Ignore()
@@ -217,6 +219,14 @@ func lexBlankLine(l *lex.Lexer) lex.StateFn {
 		l.Errorf("unexpected non-blank line at line %v", l.LineNumber())
 		return lexSkipLine
 	}
+	l.Ignore()
+	return nil
+}
+
+func lexSkipLine(l *lex.Lexer) lex.StateFn {
+	l.AcceptRunNot(lineend)
+	l.AcceptRun(lineend)
+	l.Ignore()
 	return nil
 }
 
