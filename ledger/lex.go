@@ -8,12 +8,14 @@ import (
 
 const (
 	tokNewline lex.TokType = iota
-	tokIndent              // tab, multispace, etc
 	tokDate                //
 	tokText                // trans header, comment text, etc.
 	tokMeta                // metadata/notes/comments
 	tokCleared
-	tokMultispace
+	tokPayee
+	tokBeginTrans
+	tokEndTrans
+	tokAccount
 	tokUnit
 	tokCommod
 	tokNumber
@@ -25,12 +27,19 @@ var tokNames = map[lex.TokType]string{
 	lex.TokError:  "Error",
 	lex.TokEOF:    "EOF",
 	tokNewline:    "Newline",
-	tokIndent:     "Indent",
 	tokDate:       "Date",
 	tokText:       "Text",
 	tokMeta:       "Meta",
 	tokCleared:    "Cleared",
-	tokMultispace: "Multispace",
+	tokPayee:      "Payee",
+	tokBeginTrans: "BeginTrans",
+	tokEndTrans:   "EndTrans",
+	tokAccount:    "Account",
+	tokUnit:       "Unit",
+	tokCommod:     "Commod",
+	tokNumber:     "Number",
+	tokAt:         "At",
+	tokAtAt:       "AtAt",
 }
 
 /////////////////// state functions ///////////////////////
@@ -39,7 +48,6 @@ const (
 	indent     = " \t"
 	lineend    = "\r\n"
 	whitespace = indent + lineend
-	cleared    = "*" + indent
 	digit      = "0123456789"
 )
 
@@ -47,6 +55,7 @@ const (
 	meta = ";"
 	atat = "@@"
 	at   = "@"
+	star = "*"
 )
 
 // lexStart looks for a comment or a transaction, it emits everything
@@ -90,71 +99,112 @@ func lexBlankLine(l *lex.Lexer) lex.StateFn {
 }
 
 func lexMeta(l *lex.Lexer) lex.StateFn {
-	l.Accept(";")
-	l.AcceptRun(indent)
-	l.Ignore()
-	return lexText
+	if l.Accept(";") {
+		l.Emit(tokMeta)
+		l.AcceptRun(indent)
+		l.Ignore()
+		return lexText
+	}
+	return nil
 }
 
 func lexText(l *lex.Lexer) lex.StateFn {
 	l.AcceptRunNot(lineend + meta)
 	l.Emit(tokText)
+	return lexNewline
+}
+
+func lexTrans(l *lex.Lexer) lex.StateFn {
+	l.Emit(tokBeginTrans)
+
+	l.Push(lexStart)
+	l.Push(lexEndTrans)
+	l.Push(lexItems)
+	l.Push(lexMeta)
+	l.Push(lexPayee)
+	l.Push(lexCleared)
+	return lexDate
+}
+
+func lexEndTrans(l *lex.Lexer) lex.StateFn {
+	l.Emit(tokEndTrans)
+	return nil
+}
+
+func lexCleared(l *lex.Lexer) lex.StateFn {
+	if l.AcceptRun(star+indent) > 0 {
+		l.Emit(tokCleared)
+	}
+	return nil
+}
+
+func lexPayee(l *lex.Lexer) lex.StateFn {
+	if l.AcceptRunNot(lineend+meta) > 0 {
+		l.Emit(tokPayee)
+	}
+	return nil
+}
+
+func lexItems(l *lex.Lexer) lex.StateFn {
+	if l.AcceptRun(indent) == 0 {
+		return nil
+	} else if string(l.Peek()) == meta {
+		l.Push(lexItems)
+		return lexMeta
+	}
+
+	l.Ignore()
+
+	l.Push(lexItems)
+	l.Push(lexAt)
+	l.Push(lexNumber)
+	return lexAccount
+}
+
+func lexItem(l *lex.Lexer) lex.StateFn {
 	return nil
 }
 
 func lexDate(l *lex.Lexer) lex.StateFn {
-	l.AcceptRunNot(whitespace + meta)
-	l.Emit(tokDate)
-	return lexCleared
-}
-
-func lexCleared(l *lex.Lexer) lex.StateFn {
-	if l.AcceptRun(cleared) > 0 {
-		l.Emit(tokCleared)
+	fail := false
+	if l.AcceptRun(digit) == 0 {
+		fail = true
+	} else if !l.Accept("/") {
+		fail = true
+	} else if l.AcceptRun(digit) == 0 {
+		fail = true
+	} else if !l.Accept("/") {
+		fail = true
+	} else if l.AcceptRun(digit) == 0 {
+		fail = true
 	}
-	return lexText
+
+	if fail {
+		l.AcceptRunNot(whitespace + meta)
+		l.Errorf("invalid date on line %v", l.LineNumber())
+		l.Ignore()
+	} else {
+		l.Emit(tokDate)
+	}
+	return nil
 }
 
-func lexLineEnd(l *lex.Lexer) lex.StateFn {
+func lexNewline(l *lex.Lexer) lex.StateFn {
 	l.AcceptRun(whitespace)
 	l.Emit(tokNewline)
 	return lexStart
 }
 
-func lexIndent(l *lex.Lexer) lex.StateFn {
-	l.AcceptRun(indent)
-	l.Emit(tokIndent)
-	return lexIndented
-}
-
-func lexMultispace(l *lex.Lexer) lex.StateFn {
-	l.AcceptRun(indent)
-	l.Emit(tokMultispace)
-	return lexAmount
-}
-
-func lexUnit(l *lex.Lexer) lex.StateFn {
-	if l.Accept("$") {
-		l.Emit(tokUnit)
-	}
-	return lexAmount
-}
-
 func lexAt(l *lex.Lexer) lex.StateFn {
-	if n := l.AcceptRun(at); n == 2 {
-		l.Emit(tokAtAt)
+	if n := l.AcceptRun(at); n > 2 {
+		l.Errorf("invalid token on line %v", l.LineNumber())
+		return lexSkipLine
 	} else if n == 1 {
 		l.Emit(tokAt)
-	} else if n == 0 {
-		if string(l.Peek()) == meta {
-			return lexMeta
-		} else {
-			return lexLineEnd
-		}
-	} else {
-		l.Emit(lex.TokError)
+	} else if n == 2 {
+		l.Emit(tokAtAt)
 	}
-	return lexAmount
+	return nil
 }
 
 func lexCommod(l *lex.Lexer) lex.StateFn {
@@ -163,10 +213,13 @@ func lexCommod(l *lex.Lexer) lex.StateFn {
 	if l.AcceptRunNot(whitespace+meta+at) > 0 {
 		l.Emit(tokCommod)
 	}
-	return lexAt
+	return nil
 }
 
-func lexAmount(l *lex.Lexer) lex.StateFn {
+func lexNumber(l *lex.Lexer) lex.StateFn {
+	if l.Accept("$") {
+		l.Emit(tokUnit)
+	}
 	l.AcceptRun(digit + ",")
 	l.Accept(".")
 	l.AcceptRun(digit)
@@ -174,24 +227,18 @@ func lexAmount(l *lex.Lexer) lex.StateFn {
 	return lexCommod
 }
 
-func lexIndented(l *lex.Lexer) lex.StateFn {
+func lexAccount(l *lex.Lexer) lex.StateFn {
 	for {
 		nr := l.Next()
 		nnr := l.Peek()
 		l.Backup()
-		if isSpace(nr) && isSpace(nnr) {
-			return lexMultispace
-		}
-
-		if l.AcceptRunNot(whitespace+meta) == 0 {
-			if string(l.Peek()) == meta {
-				return lexMeta
-			} else {
-				return lexLineEnd
-			}
+		if isSpace(nr) && isSpace(nnr) || isNewline(nnr) {
+			l.Emit(tokAccount)
+			l.AcceptRun(indent)
+			l.Ignore()
+			return nil
 		}
 	}
-	return lexText
 }
 
 // isSpace reports whether r is a spacing character
@@ -200,10 +247,10 @@ func isSpace(r rune) bool {
 }
 
 func isWhitespace(r rune) bool {
-	return isSpace(r) || isLineEnd(r)
+	return isSpace(r) || isNewline(r)
 }
 
-// isLineEnd
-func isLineEnd(r rune) bool {
+// isNewline
+func isNewline(r rune) bool {
 	return r == '\r' || r == '\n'
 }
