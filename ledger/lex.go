@@ -156,7 +156,8 @@ func lexItem(l *lex.Lexer) lex.StateFn {
 	l.Push(lexAmount)
 	l.Push(lexAt)
 	l.Push(lexAmount)
-	return lexAccount
+	l.Push(lexAccount)
+	return lexStatus
 }
 
 func lexAccount(l *lex.Lexer) lex.StateFn {
