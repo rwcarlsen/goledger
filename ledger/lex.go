@@ -49,7 +49,7 @@ const (
 	lineend    = "\r\n"
 	whitespace = indent + lineend
 	digit      = "0123456789"
-	statuss    = "*"
+	statuss    = "*!"
 )
 
 const (

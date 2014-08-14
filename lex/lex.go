@@ -54,7 +54,7 @@ func New(name, input string, start StateFn) *Lexer {
 	l := &Lexer{
 		name:   name,
 		Input:  input,
-		Tokens: make(chan Token),
+		Tokens: make(chan Token, 100),
 	}
 	go l.run(start)
 	return l
