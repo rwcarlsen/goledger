@@ -54,14 +54,13 @@ const (
 func lexStart(l *lex.Lexer) lex.StateFn {
 	switch r := l.Peek(); {
 	case string(r) == meta:
+		l.Push(lexStart)
 		return lexMeta
 	case unicode.IsDigit(r):
 		return lexTrans
 	case isWhitespace(r):
 		l.Push(lexStart)
 		return lexBlankLine
-	case isSpace(r):
-		return lexIndent
 	case r == lex.EOF:
 		l.Emit(lex.TokEOF)
 		return nil
@@ -90,6 +89,19 @@ func lexBlankLine(l *lex.Lexer) lex.StateFn {
 	return nil
 }
 
+func lexMeta(l *lex.Lexer) lex.StateFn {
+	l.Accept(";")
+	l.AcceptRun(indent)
+	l.Ignore()
+	return lexText
+}
+
+func lexText(l *lex.Lexer) lex.StateFn {
+	l.AcceptRunNot(lineend + meta)
+	l.Emit(tokText)
+	return nil
+}
+
 func lexDate(l *lex.Lexer) lex.StateFn {
 	l.AcceptRunNot(whitespace + meta)
 	l.Emit(tokDate)
@@ -100,19 +112,6 @@ func lexCleared(l *lex.Lexer) lex.StateFn {
 	if l.AcceptRun(cleared) > 0 {
 		l.Emit(tokCleared)
 	}
-	return lexText
-}
-
-func lexText(l *lex.Lexer) lex.StateFn {
-	if l.AcceptRunNot(lineend+meta) > 0 {
-		l.Emit(tokText)
-	}
-	return lexStart
-}
-
-func lexMeta(l *lex.Lexer) lex.StateFn {
-	l.Pos += len(meta)
-	l.Emit(tokMeta)
 	return lexText
 }
 
