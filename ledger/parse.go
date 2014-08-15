@@ -51,6 +51,7 @@ func (a *Parser) pNote(p *parse.Parser) parse.StateFn {
 }
 
 func (a *Parser) Start(p *parse.Parser) parse.StateFn {
+	fmt.Println("Start")
 	a.currNote = ""
 	switch tok := p.Peek(); tok.Type {
 	case lex.TokEOF:
@@ -69,6 +70,7 @@ func (a *Parser) Start(p *parse.Parser) parse.StateFn {
 }
 
 func (a *Parser) pTrans(p *parse.Parser) parse.StateFn {
+	fmt.Println("Trans")
 	tok := p.Next()
 	if tok.Type != tokBeginTrans {
 		panic(fmt.Sprintf("unexpected token %v: '%v'", tokNames[tok.Type], tok.Val))
@@ -79,23 +81,27 @@ func (a *Parser) pTrans(p *parse.Parser) parse.StateFn {
 	return a.pHeader
 }
 func (a *Parser) pEndTrans(p *parse.Parser) parse.StateFn {
+	fmt.Println("EndTrans")
 	a.Journal = append(a.Journal, a.currTrans)
 	return a.Start
 }
 
 func (a *Parser) pItem(p *parse.Parser) parse.StateFn {
+	fmt.Println("Item")
 	tok := p.Next()
 
 	a.currItem = &Item{}
 
 	// check for status
 	if tok.Type == tokStatus {
+		fmt.Println("status")
 		a.currItem.Status = tok.Val
 		tok = p.Next()
 	}
 
 	// check for account (required)
 	if tok.Type == tokAccount {
+		fmt.Println("account: ", tok.Val)
 		a.currItem.Account = tok.Val
 		tok = p.Next()
 	} else {
@@ -109,13 +115,18 @@ func (a *Parser) pItem(p *parse.Parser) parse.StateFn {
 }
 
 func (a *Parser) pEndItem(p *parse.Parser) parse.StateFn {
+	fmt.Println("enditem")
 	a.currItem.Note = a.currNote
 	a.currNote = ""
 	a.currTrans.Items = append(a.currTrans.Items, a.currItem)
-	return nil
+	if tok := p.Peek(); tok.Type == tokEndTrans {
+		return nil
+	}
+	return a.pItem
 }
 
 func (a *Parser) pAmount(p *parse.Parser) parse.StateFn {
+	fmt.Println("amount")
 	tok := p.Peek()
 
 	if tok.Type == tokUnit {
@@ -126,7 +137,6 @@ func (a *Parser) pAmount(p *parse.Parser) parse.StateFn {
 	switch tok := p.Peek(); tok.Type {
 	case tokNewline, tokEndTrans:
 		p.Next()
-		return nil
 	case tokAmount:
 		tok = p.Next()
 		rat := big.NewRat(0, 1)
@@ -145,6 +155,7 @@ func (a *Parser) pAmount(p *parse.Parser) parse.StateFn {
 }
 
 func (a *Parser) pExAmount(p *parse.Parser) parse.StateFn {
+	fmt.Println("examount")
 	tok := p.Peek()
 
 	if tok.Type == tokUnit {
@@ -155,7 +166,6 @@ func (a *Parser) pExAmount(p *parse.Parser) parse.StateFn {
 	switch tok := p.Peek(); tok.Type {
 	case tokNewline, tokEndTrans:
 		p.Next()
-		return nil
 	case tokAmount:
 		tok = p.Next()
 		rat := big.NewRat(0, 1)
