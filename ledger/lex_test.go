@@ -9,8 +9,8 @@ import (
 
 const journal1 = `
 2010/05/31 Just an example
-    * Expenses:Some:Account                $100.00
-    * Income:Another:Account
+    * Expenses:Some foo:Account                $100.00
+    * Income:Another bar:Account
 `
 
 func TestLex(t *testing.T) {
