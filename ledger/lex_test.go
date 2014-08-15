@@ -8,6 +8,8 @@ import (
 )
 
 const journal1 = `
+account Assets:Bitcoin Wallet
+
 2010/05/31 Just an example
     * Expenses:Some foo:Account                $100.00
     * Income:Another bar:Account

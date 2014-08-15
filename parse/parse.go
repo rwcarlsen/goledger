@@ -12,15 +12,10 @@ type Parser struct {
 }
 
 func New(l *lex.Lexer, start StateFn) *Parser {
-	p := &Parser{
-		l: l,
-	}
-	go p.run(start)
-	return p
+	return &Parser{l: l, states: []StateFn{start}}
 }
 
-func (p *Parser) run(start StateFn) {
-	p.Push(start)
+func (p *Parser) Run() {
 	for len(p.states) > 0 {
 		state := p.pop()
 		state = state(p)
