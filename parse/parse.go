@@ -49,7 +49,7 @@ func (p *Parser) Backup() {
 
 func (p *Parser) Peek() lex.Token {
 	p.fill()
-	return p.toks[p.pos+1]
+	return p.toks[p.pos]
 }
 
 // fill adds pulls tokens from the lexer so that the nth token after the
@@ -61,7 +61,7 @@ func (p *Parser) fill() {
 			tok := <-p.l.Tokens
 			blank := lex.Token{}
 			if tok == blank {
-				panic("eof - decide what to do")
+				return
 			}
 			p.toks = append(p.toks, tok)
 		}

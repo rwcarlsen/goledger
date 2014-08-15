@@ -8,19 +8,19 @@ import (
 
 const (
 	tokNewline lex.TokType = iota
-	tokDate                //
-	tokText                // trans header, comment text, etc.
-	tokMeta                // metadata/notes/comments
+	tokBeginTrans
+	tokDate //
 	tokStatus
 	tokPayee
-	tokBeginTrans
-	tokEndTrans
+	tokMeta // metadata/notes/comments
+	tokText // trans header, comment text, etc.
 	tokAccount
 	tokUnit
 	tokCommod
 	tokAmount
 	tokAt
 	tokAtAt
+	tokEndTrans
 )
 
 var tokNames = map[lex.TokType]string{
@@ -75,7 +75,7 @@ func lexStart(l *lex.Lexer) lex.StateFn {
 		l.Emit(lex.TokEOF)
 		return nil
 	default:
-		l.Errorf("Unexpected text on line %v", l.LineNumber())
+		l.Errorf("unexpected text on line %v", l.LineNumber())
 		l.Push(lexStart)
 		return lexSkipLine
 	}

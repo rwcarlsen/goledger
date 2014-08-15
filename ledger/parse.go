@@ -31,9 +31,27 @@ type Parser struct {
 	Journal   []*Trans
 	currTrans *Trans
 	currItem  *Item
+	currNote  string
+	currAmt   *big.Rat
+}
+
+func (a *Parser) pNote(p *parse.Parser) parse.StateFn {
+	switch tok := p.Peek(); tok.Type {
+	case tokMeta:
+		p.Next()
+		tok = p.Next()
+		a.currNote = tok.Val
+		if tok = p.Next(); tok.Type != tokNewline {
+			panic(fmt.Sprintf("unexpected token %v: '%v'", tokNames[tok.Type], tok.Val))
+		}
+		return nil
+	default:
+		return nil
+	}
 }
 
 func (a *Parser) Start(p *parse.Parser) parse.StateFn {
+	a.currNote = ""
 	switch tok := p.Peek(); tok.Type {
 	case lex.TokEOF:
 		return nil
@@ -42,16 +60,18 @@ func (a *Parser) Start(p *parse.Parser) parse.StateFn {
 		return a.pTrans
 	case tokNewline:
 		return a.Start
+	case tokMeta:
+		p.Push(a.Start)
+		return a.pNote
 	default:
-		panic("unexpected token")
+		panic(fmt.Sprintf("unexpected token %v: '%v'", tokNames[tok.Type], tok.Val))
 	}
 }
 
 func (a *Parser) pTrans(p *parse.Parser) parse.StateFn {
 	tok := p.Next()
-	fmt.Printf("type %v: %+v\n", tokNames[tok.Type], tok)
 	if tok.Type != tokBeginTrans {
-		panic("unexpected token")
+		panic(fmt.Sprintf("unexpected token %v: '%v'", tokNames[tok.Type], tok.Val))
 	}
 
 	a.currTrans = &Trans{}
@@ -64,94 +84,100 @@ func (a *Parser) pEndTrans(p *parse.Parser) parse.StateFn {
 }
 
 func (a *Parser) pItem(p *parse.Parser) parse.StateFn {
-	var err error
 	tok := p.Next()
 
-	item := &Item{}
+	a.currItem = &Item{}
 
 	// check for status
 	if tok.Type == tokStatus {
-		item.Status = tok.Val
+		a.currItem.Status = tok.Val
 		tok = p.Next()
 	}
 
 	// check for account (required)
 	if tok.Type == tokAccount {
-		item.Account = tok.Val
+		a.currItem.Account = tok.Val
 		tok = p.Next()
 	} else {
-		panic("unexpected token")
+		panic(fmt.Sprintf("unexpected token %v: '%v'", tokNames[tok.Type], tok.Val))
 	}
 
-	// check for unit
+	p.Push(a.pEndItem)
+	p.Push(a.pNote)
+	p.Push(a.pExchange)
+	return a.pAmount
+}
+
+func (a *Parser) pEndItem(p *parse.Parser) parse.StateFn {
+	a.currItem.Note = a.currNote
+	a.currNote = ""
+	a.currTrans.Items = append(a.currTrans.Items, a.currItem)
+	return nil
+}
+
+func (a *Parser) pAmount(p *parse.Parser) parse.StateFn {
+	tok := p.Peek()
+
 	if tok.Type == tokUnit {
-		item.Commod = tok.Val
 		tok = p.Next()
+		a.currItem.Commod = tok.Val
 	}
 
-	// check for amount (required)
-	if tok.Type == tokAmount {
-		rat := big.NewRat(0, 0)
-		var success bool
-		item.Amount, success = rat.SetString(tok.Val)
-		if !success {
-			panic(err.Error())
-		}
-		tok = p.Next()
-	} else {
-		panic("unexpected token")
-	}
-
-	// check for commod
-	if tok.Type == tokCommod {
-		item.Commod = tok.Val
-		tok = p.Next()
-	}
-
-	// check for exchange rate
-	if tok.Type == tokAt || tok.Type == tokAtAt {
-		// check for unit
-		if tok.Type == tokUnit {
-			item.ExCommod = tok.Val
-			tok = p.Next()
-		}
-
-		// check for amount (required)
-		if tok.Type == tokAmount {
-			rat := big.NewRat(0, 0)
-			var success bool
-			item.ExAmount, success = rat.SetString(tok.Val)
-			if !success {
-				panic(err.Error())
-			}
-			tok = p.Next()
-		} else {
-			panic("unexpected token")
-		}
-
-		// check for commod
-		if tok.Type == tokCommod {
-			item.ExCommod = tok.Val
-			tok = p.Next()
-		}
-	}
-
-	// check for note
-	if tok.Type == tokMeta {
-		item.Note = p.Next().Val
-		tok = p.Next()
-	}
-
-	if tok.Type != tokNewline {
-		panic("unexpected token")
-	}
-
-	a.currTrans.Items = append(a.currTrans.Items, item)
-	if tok.Type == tokEndTrans {
+	switch tok := p.Peek(); tok.Type {
+	case tokNewline, tokEndTrans:
+		p.Next()
 		return nil
-	} else {
-		return a.pItem
+	case tokAmount:
+		tok = p.Next()
+		rat := big.NewRat(0, 1)
+		var success bool
+		a.currItem.Amount, success = rat.SetString(tok.Val)
+		if !success {
+			panic("invalid amount")
+		}
+
+		if tok = p.Peek(); tok.Type == tokCommod {
+			tok = p.Next()
+			a.currItem.Commod = tok.Val
+		}
 	}
+	return nil
+}
+
+func (a *Parser) pExAmount(p *parse.Parser) parse.StateFn {
+	tok := p.Peek()
+
+	if tok.Type == tokUnit {
+		tok = p.Next()
+		a.currItem.ExCommod = tok.Val
+	}
+
+	switch tok := p.Peek(); tok.Type {
+	case tokNewline, tokEndTrans:
+		p.Next()
+		return nil
+	case tokAmount:
+		tok = p.Next()
+		rat := big.NewRat(0, 1)
+		var success bool
+		a.currItem.ExAmount, success = rat.SetString(tok.Val)
+		if !success {
+			panic("invalid amount")
+		}
+		if tok = p.Peek(); tok.Type == tokCommod {
+			tok = p.Next()
+			a.currItem.ExCommod = tok.Val
+		}
+	}
+	return nil
+}
+
+func (a *Parser) pExchange(p *parse.Parser) parse.StateFn {
+	tok := p.Peek()
+	if tok.Type != tokAt || tok.Type != tokAtAt {
+		return a.pExAmount
+	}
+	return nil
 }
 
 func (a *Parser) pHeader(p *parse.Parser) parse.StateFn {
@@ -160,13 +186,13 @@ func (a *Parser) pHeader(p *parse.Parser) parse.StateFn {
 	// check for date (required)
 	if tok.Type == tokDate {
 		var err error
-		a.currTrans.Date, err = time.Parse("__06/_1/_2", tok.Val)
+		a.currTrans.Date, err = time.Parse("06/1/2", tok.Val)
 		if err != nil {
 			panic(err.Error())
 		}
 		tok = p.Next()
 	} else {
-		panic("unexpected token")
+		panic(fmt.Sprintf("unexpected token %v: '%v'", tokNames[tok.Type], tok.Val))
 	}
 
 	// check for status
@@ -180,7 +206,7 @@ func (a *Parser) pHeader(p *parse.Parser) parse.StateFn {
 		a.currTrans.Descrip = tok.Val
 		tok = p.Next()
 	} else {
-		panic("unexpected token")
+		panic(fmt.Sprintf("unexpected token %v: '%v'", tokNames[tok.Type], tok.Val))
 	}
 
 	// check for note
@@ -190,7 +216,7 @@ func (a *Parser) pHeader(p *parse.Parser) parse.StateFn {
 	}
 
 	if tok.Type != tokNewline {
-		panic("unexpected token")
+		panic(fmt.Sprintf("unexpected token %v: '%v'", tokNames[tok.Type], tok.Val))
 	}
 	return a.pItem
 }

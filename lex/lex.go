@@ -9,7 +9,7 @@ import (
 type TokType int
 
 const (
-	TokError TokType = iota - 2
+	TokError TokType = -1*iota - 1
 	TokEOF
 )
 
@@ -38,14 +38,13 @@ type StateFn func(*Lexer) StateFn
 
 // Lexer holds the state of the scanner.
 type Lexer struct {
-	name    string     // the name of the input; used only for error reports
-	Input   string     // the string being scanned
-	states  []StateFn  // the next lexing function to enter
-	Pos     int        // current position in the input
-	Start   int        // start position of this Token
-	width   int        // width of last rune read from input
-	lastPos int        // position of most recent Token returned by nextItem
-	Tokens  chan Token // channel of scanned Tokens
+	name   string     // the name of the input; used only for error reports
+	Input  string     // the string being scanned
+	states []StateFn  // the next lexing function to enter
+	Pos    int        // current position in the input
+	Start  int        // start position of this Token
+	width  int        // width of last rune read from input
+	Tokens chan Token // channel of scanned Tokens
 }
 
 // New creates a new scanner for the input string and begins lexing imediately,
@@ -58,6 +57,19 @@ func New(name, input string, start StateFn) *Lexer {
 	}
 	go l.run(start)
 	return l
+}
+
+// run runs the state machine for the Lexer.
+func (l *Lexer) run(start StateFn) {
+	l.Push(start)
+	for len(l.states) > 0 {
+		state := l.pop()
+		state = state(l)
+		if state != nil {
+			l.Push(state)
+		}
+	}
+	close(l.Tokens)
 }
 
 // Next returns the next rune in the input.
@@ -142,26 +154,16 @@ func (l *Lexer) AcceptRunNot(invalid string) int {
 	return l.Pos - x
 }
 
-// LineNumber reports which line we're on, based on the position of
-// the previous Token returned by nextItem. Doing it this way
-// means we don't have to worry about peek double counting.
+// LineNumber reports which line we're on, based on the current position.
 func (l *Lexer) LineNumber() int {
-	return 1 + strings.Count(l.Input[:l.lastPos], "\n")
+	return 1 + strings.Count(l.Input[:l.Pos], "\n")
 }
 
-// Errorf returns an error Token and terminates the scan by passing
-// back a nil pointer that will be the next state, terminating l.nextItem.
+// Errorf returns an error Token.
 func (l *Lexer) Errorf(format string, args ...interface{}) StateFn {
 	l.Tokens <- Token{TokError, l.Start, fmt.Sprintf(format, args...)}
 	l.Ignore()
 	return nil
-}
-
-// nextItem returns the next Token from the input.
-func (l *Lexer) nextItem() Token {
-	Tok := <-l.Tokens
-	l.lastPos = Tok.Pos
-	return Tok
 }
 
 func (l *Lexer) Push(s StateFn) {
@@ -173,17 +175,4 @@ func (l *Lexer) pop() StateFn {
 	s := l.states[last]
 	l.states = l.states[:last]
 	return s
-}
-
-// run runs the state machine for the Lexer.
-func (l *Lexer) run(start StateFn) {
-	l.Push(start)
-	for len(l.states) > 0 {
-		state := l.pop()
-		state = state(l)
-		if state != nil {
-			l.Push(state)
-		}
-	}
-	close(l.Tokens)
 }
