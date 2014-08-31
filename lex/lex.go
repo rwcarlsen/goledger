@@ -1,6 +1,8 @@
-package lex
+package ledger
 
 import (
+	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"log"
@@ -21,6 +23,20 @@ type Trans struct {
 	Note    string
 }
 
+func (t *Trans) String() string {
+	var b bytes.Buffer
+	tm := t.Date.Format("2006/1/2")
+	fmt.Fprintf(&b, "%v %v %v", tm, t.Status, t.Descrip)
+	if t.Note != "" {
+		fmt.Fprint(&b, "   ;", t.Note)
+	}
+
+	for _, item := range t.Items {
+		fmt.Fprintf(&b, "\n    %v", item)
+	}
+	return b.String()
+}
+
 type Item struct {
 	Status   string
 	Account  string
@@ -31,10 +47,32 @@ type Item struct {
 	Note     string
 }
 
+func (i *Item) String() string {
+	s := ""
+	if i.Commod == "$" {
+		s = fmt.Sprintf("%v %v        $%v", i.Status, i.Account, i.Amount.FloatString(2))
+	} else {
+		s = fmt.Sprintf("%v %v        %v %v", i.Status, i.Account, i.Amount.FloatString(2), i.Commod)
+	}
+
+	if i.ExAmount != nil {
+		if i.ExCommod == "$" {
+			s += fmt.Sprintf("@ $%v", i.ExAmount.FloatString(2))
+		} else {
+			s += fmt.Sprintf("@ %v %v", i.ExAmount.FloatString(2), i.ExCommod)
+		}
+	}
+
+	if i.Note != "" {
+		s += fmt.Sprintf("   ;%v", i.Note)
+	}
+	return s
+}
+
 const (
 	space      = " \t"
 	lineend    = "\r\n"
-	whitespace = indent + lineend
+	whitespace = space + lineend
 	digit      = "0123456789"
 	statuss    = "*!"
 )
@@ -46,7 +84,7 @@ const (
 )
 
 // Decode
-func Decode(r io.Reader) (Journal, error) {
+func Decode(r io.Reader) ([]*Trans, error) {
 	data, err := ioutil.ReadAll(r)
 	if err != nil {
 		return nil, err
@@ -55,7 +93,7 @@ func Decode(r io.Reader) (Journal, error) {
 	l := &Lexer{
 		Input: string(data),
 	}
-	decode(l * Lexer)
+	decode(l)
 	return l.Journal, nil
 }
 
@@ -63,10 +101,11 @@ func decode(l *Lexer) {
 	for {
 		switch r := l.Peek(); {
 		case unicode.IsDigit(r):
-			if abort := lexTrans(l); abort {
-				return
+			trans, abort := lexTrans(l)
+			if !abort {
+				l.Journal = append(l.Journal, trans)
 			}
-		case EOF:
+		case r == EOF:
 			return
 		case unicode.IsSpace(r):
 			skipBlankLines(l)
@@ -113,10 +152,7 @@ func lexTrans(l *Lexer) (t *Trans, abort bool) {
 
 	skipLine(l)
 
-	items, abort := lexItems()
-	if abort {
-		return nil, abort
-	}
+	items := lexItems(l)
 
 	// build transaction
 	return &Trans{
@@ -128,13 +164,26 @@ func lexTrans(l *Lexer) (t *Trans, abort bool) {
 	}, false
 }
 
-func lexItems(l *Lexer) []Item {
+func lexItems(l *Lexer) []*Item {
+	items := []*Item{}
 	for {
-		if r := l.Peek(); r == EOF || r == '\n' || r == '\r' {
+		if skipBlankLines(l) > 0 {
+			break
+		} else if l.Peek() == EOF {
+			break
+		} else if skipSpace(l) == 0 {
 			break
 		}
 
-		skipSpace(l)
+		if l.Accept(meta) {
+			l.Emit()
+			l.AcceptRunNot(lineend)
+			if len(items) > 0 {
+				items[len(items)-1].Note += l.Emit()
+			}
+			skipLine(l)
+			continue
+		}
 
 		status := ""
 		if l.Accept(statuss) {
@@ -145,12 +194,14 @@ func lexItems(l *Lexer) []Item {
 		account := lexAccount(l)
 		skipSpace(l)
 
-		// unit (prefix comomd)
+		// primary commod and amount
 		amount, commod := lexAmount(l)
 
 		skipSpace(l)
 
-		examount, excommod := nil, ""
+		// exchange commod and amount
+		var examount *big.Rat
+		excommod := ""
 		if n := l.AcceptRun(at); n > 2 {
 			log.Fatalf("invalid token on line %v: %v", l.Line(), l.Emit())
 		} else if n == 1 {
@@ -166,8 +217,10 @@ func lexItems(l *Lexer) []Item {
 		if l.Accept(meta) {
 			l.Emit()
 			l.AcceptRunNot(lineend)
-			note = l.Emit()
+			note += l.Emit()
 		}
+
+		skipLine(l)
 
 		items = append(items, &Item{
 			status,
@@ -182,17 +235,32 @@ func lexItems(l *Lexer) []Item {
 	return items
 }
 
-func lexAmount(l) (amount *bit.Rat, commod string) {
+func lexNumber(l *Lexer) string {
+	l.Accept("+-")
+	l.AcceptRun(digit + ",")
+	l.Accept(".")
+	l.AcceptRun(digit)
+	if l.Accept("Ee") {
+		l.Accept("+-")
+		l.AcceptRun(digit)
+	}
+	return l.Emit()
+}
+
+func lexAmount(l *Lexer) (amount *big.Rat, commod string) {
 	if l.Accept("$") {
 		commod = "$"
+		l.Emit()
 	}
 
-	amt := lexAmount
-	var err error
-	amount = big.NewRat(0, 1)
-	amount, err = big.SetString(amt)
-	if err != nil {
-		log.Fatalf("invalid amount on line %v: %v", l.Line(), amount)
+	var success bool
+	amt := lexNumber(l)
+	amount = &big.Rat{}
+	if len(amt) > 0 {
+		amount, success = amount.SetString(amt)
+		if !success {
+			log.Fatalf("invalid amount on line %v: %v", l.Line(), amt)
+		}
 	}
 
 	skipSpace(l)
@@ -202,26 +270,13 @@ func lexAmount(l) (amount *bit.Rat, commod string) {
 	return amount, commod
 }
 
-func lexCommod(l *Lexer) string {
-}
-
-func lexAmount(l *Lexer) *big.Rat {
-	l.AcceptRun(digit + ",")
-	l.Accept(".")
-	l.AcceptRun(digit)
-	if l.Pos > l.Start {
-		l.Emit(tokAmount)
-	}
-}
-
 func lexAccount(l *Lexer) string {
 	for {
 		r := l.Next()
 		nr := l.Peek()
 		if isSpace(r) && isSpace(nr) || isNewline(r) || r == EOF {
 			l.Backup()
-			account := l.Emit()
-			return account
+			return l.Emit()
 		}
 	}
 }
@@ -240,15 +295,16 @@ func skipLine(l *Lexer) {
 	l.Emit()
 }
 
-func skipSpace(l *Lexer) {
+func skipSpace(l *Lexer) int {
 	l.AcceptRun(space)
-	l.Emit()
+	return len(l.Emit())
 }
 
 func skipBlankLines(l *Lexer) int {
 	count := 0
 	for {
-		if l.AcceptRun(space) == 0 && l.Acceptrun(lineend) == 0 {
+		l.AcceptRun(space)
+		if l.AcceptRun(lineend) == 0 {
 			l.Reset()
 			return count
 		}

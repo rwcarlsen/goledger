@@ -9,24 +9,6 @@ import (
 	"github.com/rwcarlsen/goledger/parse"
 )
 
-type Trans struct {
-	Date    time.Time
-	Status  string
-	Descrip string
-	Items   []*Item
-	Note    string
-}
-
-type Item struct {
-	Status   string
-	Account  string
-	Amount   *big.Rat
-	Commod   string
-	ExAmount *big.Rat
-	ExCommod string
-	Note     string
-}
-
 type Parser struct {
 	Journal   []*Trans
 	currTrans *Trans
